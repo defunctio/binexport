@@ -20,6 +20,8 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}
                               ${PROJECT_SOURCE_DIR}/..)
 include(ExternalProject)
 
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+
 include(absl.cmake)
 include(cctz.cmake)
 include(googletest.cmake)
@@ -27,7 +29,8 @@ include(openssl.cmake)
 include(postgresql.cmake)  # Depends on openssl
 include(protobuf.cmake)
 
-find_package(IdaSdk REQUIRED)
+find_package(IdaSdk)
+find_package(BNSdk)
 
 string(REPLACE ";" "^^" CMAKE_PREFIX_PATH_ALT_SEP "${CMAKE_PREFIX_PATH}")
 ExternalProject_Add(binexport
@@ -47,5 +50,7 @@ ExternalProject_Add(binexport
              "-DCCTZ_ROOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/cctz"
              "-DGOOGLETEST_ROOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/googletest"
              "-DIdaSdk_DIR=${IdaSdk_ROOT_DIR}"
+              "-DBNSdk_DIR=${BNSdk_ROOT_DIR}"
              "-DBUILD_TESTING=OFF"
+             "-DCMAKE_BUILD_TYPE=Debug"
 )

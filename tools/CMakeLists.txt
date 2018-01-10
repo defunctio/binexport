@@ -23,3 +23,25 @@ target_link_libraries(binexport2dump
   binexport_proto
 )
 install(TARGETS binexport2dump RUNTIME DESTINATION binexport-prefix)
+
+
+
+add_executable(binjadump binjadump.cc)
+
+set_target_properties(binjadump PROPERTIES
+  RPATH $ORIGIN:$ORIGIN/plugins
+  INSTALL_RPATH $ORIGIN:$ORIGIN/plugins
+  )
+
+find_library(DL_LIBRARIES dl)
+MESSAGE(STATUS "DL_LIBRARIES:" ${DL_LIBRARIES})
+
+target_link_libraries(binjadump
+  absl::strings
+  binexport_base
+  binjaexport
+  #  ${DL_LIBRARIES}
+  -ldl # TODO: fix dl
+)
+
+install(TARGETS binjadump RUNTIME DESTINATION binexport-prefix)
