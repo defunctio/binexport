@@ -36,19 +36,13 @@
 #include <cinttypes>
 #include <database_writer.h>
 #include <hex_codec.h>
-#include <address_references.h>
-#include <edge.h>
-#include <comment.h>
-#include <absl/strings/string_view.h>
-#include <third_party/binaryninja/binaryninja-api/binaryninjaapi.h>
+#include <stubs/base/logging.h>
+#include <absl/strings/str_cat.h>
+#include <absl/time/time.h>
 
 BinjaExport::BinjaExport(BinaryNinja::Ref<BinaryNinja::BinaryView> view) : m_view(view) {
 
   m_view = view;
-//  if (!m_view) {
-//    std::cerr << "m_view == NULL" << std::endl;
-//    throw;
-//  }
   m_arch = m_view->GetDefaultArchitecture();
   // Required for at least string refs, maybe others.
   m_view->UpdateAnalysisAndWait();
@@ -62,7 +56,6 @@ BinjaExport::BinjaExport(BinaryNinja::Ref<BinaryNinja::BinaryView> view) : m_vie
 
 BinaryNinja::Ref<BinaryNinja::BinaryView> BinjaExport::viewFromFilename(const std::string &filename) {
   // TODO: add support for creating BNDB not just existing
-  // TODO: test that file exists
 
   // Initialize BinaryNinja
   BinaryNinja::SetBundledPluginDirectory(getPluginDirectory());
@@ -71,18 +64,19 @@ BinaryNinja::Ref<BinaryNinja::BinaryView> BinjaExport::viewFromFilename(const st
 
   BinaryNinja::Ref<BinaryNinja::BinaryView> v;
 
-//  if (GetFileExtension(filename) != std::string(".bndb"))
-//    std::cerr << "File extension is not bndb" << std::endl;
+  if (GetFileExtension(filename) != std::string(".bndb"))
+    LOG(QFATAL) << "Input file is not a BNDB";
+  if (!FileExists(filename))
+    LOG(QFATAL) << "File " << filename << " does not exist.";
 
-  std::cout << "opening: " << filename << std::endl;
+  LOG(INFO) << "Input file: " << filename;
   auto meta = new BinaryNinja::FileMetadata(filename);
   BinaryNinja::Ref<BinaryNinja::BinaryView> bv = meta->OpenExistingDatabase(filename);
 
   for (auto &vt : BinaryNinja::BinaryViewType::GetViewTypesForData(bv)) {
     if (vt->GetName() != "Raw") {
-      std::cout << "bv type: " << vt->GetName() << std::endl;
+      LOG(INFO) << "BinaryViewType<" << vt->GetName() << ">";
       v = bv->GetFile()->GetViewOfType(vt->GetName());
-//      v = vt->Create(bv);
       break;
     }
   }
@@ -101,7 +95,6 @@ std::string BinjaExport::getPluginDirectory() {
 
   std::stringstream ss;
   ss << dirname((char *) info.dli_fname) << "/plugins/";
-  std::cout << ss.str() << std::endl;
   return ss.str();
 }
 
@@ -168,6 +161,7 @@ std::string BinjaExport::GetModuleName() {
 
 void BinjaExport::ExportDatabase(ChainWriter &writer) {
 
+  Timer<> timer;
   //Add functions
   EntryPoints entry_points;
   {
@@ -199,12 +193,11 @@ void BinjaExport::ExportDatabase(ChainWriter &writer) {
   for (auto func: flowGraph.GetFunctions())
     bbs += func.second->GetBasicBlocks().size();
 
-  std::cout << std::dec;
-  std::cout << std::to_string(bbs) << std::endl;
-  std::cout << GetModuleName() << ": exported "
-            << flowGraph.GetFunctions().size() << " functions with "
-            << instructions.size() << " instructions in " << std::endl;
-//              << StringPrintf("%.2fs", timer.elapsed());
+
+  LOG(INFO) << absl::StrCat(
+    GetModuleName(), ": exported ", flowGraph.GetFunctions().size(),
+    " functions with ", instructions.size(), " instructions in ",
+    absl::FormatDuration(absl::Seconds(timer.elapsed())));
 
 }
 
@@ -321,16 +314,16 @@ void BinjaExport::AnalyzeFlowBN(EntryPoints *entryPoints, std::map<Address, std:
                 break;
               case CallDestination:
                 // This should be all resolved call destinations including imports
-                if (!isKnownFunction(br.second)) {
-                  std::cout << "call destination is not a known target" << std::endl;
-//                                    throw;
-                }
-                {
-                  auto name = m_view->GetSymbolByAddress(br.second) ? m_view->GetSymbolByAddress(
-                      br.second)->GetFullName() : "";
-                  std::cout << func->GetSymbol()->GetFullName() << " -> "
-                            << (isImportFunction(br.second) ? "[I]" : "") << name << std::endl;
-                }
+                if (!isKnownFunction(br.second))
+                  LOG(WARNING) << "call destination is not a known target";
+
+//                {
+//                  auto name = m_view->GetSymbolByAddress(br.second) ? m_view->GetSymbolByAddress(
+//                      br.second)->GetFullName() : "";
+//                  std::cout << func->GetSymbol()->GetFullName() << " -> "
+//                            << (isImportFunction(br.second) ? "[I]" : "") << name << std::endl;
+//                }
+
                 instr.SetFlag(FLAG_CALL, true);
                 callGraph->AddFunction(br.second);
                 callGraph->AddEdge(instrAddress, br.second);
@@ -344,8 +337,8 @@ void BinjaExport::AnalyzeFlowBN(EntryPoints *entryPoints, std::map<Address, std:
                 break;
               case FunctionReturn:break;
               case SystemCall:break;
-              case IndirectBranch:std::cout << "IndirectBranch" << std::endl;
-                break;
+              case IndirectBranch:
+                break; // TODO: Handle?
               case UnresolvedBranch:
                 // IMPORT THUNKS
                 auto result = std::find_if(imports.begin(), imports.end(),
@@ -353,8 +346,9 @@ void BinjaExport::AnalyzeFlowBN(EntryPoints *entryPoints, std::map<Address, std:
                                              return instrAddress == symbol->GetAddress();
                                            });
                 if (result != imports.end()) {
-                  std::cout << "function THUNK " << (*result)->GetFullName() << std::endl;
-                  // Should probably add a data reference to the GOT entry
+                  // TODO: Should probably add a data reference to the GOT entry
+
+//                  std::cout << "function THUNK " << (*result)->GetFullName() << std::endl;
                 } else {
                   if (basicBlock->HasUndeterminedOutgoingEdges()) {}
 
@@ -401,9 +395,9 @@ void BinjaExport::AnalyzeFlowBN(EntryPoints *entryPoints, std::map<Address, std:
                                   CallGraph::CacheString(std::string(s.c_str(), s.length())),
                                   Comment::REGULAR, true);
 
-            std::cout << func->GetSymbol()->GetFullName() << "[0x" << std::hex << instrAddress
-                      << "]-0x" << (*r).first.start << " " << s
-                      << std::endl;
+//            std::cout << func->GetSymbol()->GetFullName() << "[0x" << std::hex << instrAddress
+//                      << "]-0x" << (*r).first.start << " " << s
+//                      << std::endl;
           }
           // TODO: data xrefs
 
@@ -538,7 +532,8 @@ const Operands BinjaExport::ParseOperandsX86(Address address,
       Expressions expressions;
       Expression *expression = nullptr;
       switch (op->type) {
-        case X86_OP_INVALID:std::cout << "Invalid operands for instruction" << std::endl;
+        case X86_OP_INVALID:
+          LOG(WARNING) << absl::StrCat("Invalid operands for inttruction at ", absl::Hex(insn[0].address, absl::kZeroPad8));
           break;
         case X86_OP_REG:
           expressions.push_back(expression = Expression::Create(expression, GetSizePrefix(op->size), 0,
@@ -556,20 +551,20 @@ const Operands BinjaExport::ParseOperandsX86(Address address,
               break;
             case MemOpType::MEM_TYPE_DISP:HandleDisplacementExpression(handle, op, expressions);
               break;
-            case MemOpType::MEM_TYPE_UNKNOWN:
-              std::cout << "Unhandled MEM operand at 0x" << std::hex << insn[0].address << std::dec
-                        << std::endl;
+            case MemOpType::MEM_TYPE_UNKNOWN:\
+              LOG(WARNING) << absl::StrCat("Unknown memory operand type at ", absl::Hex(insn[0].address, absl::kZeroPad8));
               break;
           }
           break;
-        case X86_OP_FP:std::cout << "FP operand at 0x" << std::hex << insn[0].address << std::dec << std::endl;
+        case X86_OP_FP:
+          LOG(WARNING) << absl::StrCat("Unhandled FPU operation at ", absl::Hex(insn[0].address, absl::kZeroPad8));
           break;
       }
       operands.push_back(Operand::CreateOperand(expressions));
     }
     cs_free(insn, count);
   } else {
-    std::cout << "ERROR decoding instruction" << std::endl;
+    LOG(ERROR) << absl::StrCat("Error decoding instruction at ", absl::Hex(insn[0].address, absl::kZeroPad8));
     throw;
   }
 
@@ -596,7 +591,7 @@ void BinjaExport::HandleDisplacementExpression(csh handle, const cs_x86_op *op, 
       expression = Expression::Create(expression, GetSizePrefix(op->size), 0, Expression::TYPE_SIZEPREFIX, pos));
   if (op->mem.segment != X86_REG_INVALID) {
     auto &&x = cs_reg_name(handle, op->mem.segment);
-    std::cout << std::string(x) << std::endl;
+//    std::cout << std::string(x) << std::endl;
   }
   if (op->mem.segment != X86_REG_INVALID) {
     std::string x(cs_reg_name(handle, op->mem.segment));

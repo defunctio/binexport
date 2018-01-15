@@ -30,7 +30,7 @@ set(Protobuf_USE_STATIC_LIBS TRUE)
 find_package(Boost 1.55 REQUIRED)
 find_package(Git)
 find_package(IdaSdk)
-find_package(BNSdk)
+find_package(BinaryNinja)
 find_package(OpenSSL 1.0.2 REQUIRED)
 find_package(PostgreSQL 9.5 REQUIRED)
 find_package(Protobuf 3.0.0 REQUIRED)
@@ -40,6 +40,7 @@ pkg_search_module(CAPSTONE REQUIRED capstone)
 include(cctz.cmake)
 include(googletest.cmake)
 include(absl.cmake)
+include(binaryninjaapi.cmake)
 
 enable_testing()
 
@@ -155,7 +156,8 @@ target_link_libraries(binexport_plugin_shared PUBLIC
   OpenSSL::Crypto
   )
 
-if (BNSdk_DIR)
+if (BINARYNINJA_DIR)
+  # TODO: check for API
   # BinjaExport static library
   set(name binjaexport)
   add_library(${name} STATIC
@@ -195,13 +197,15 @@ if (BNSdk_DIR)
 #  set_target_properties(${name} PROPERTIES PREFIX "")
 
   find_library(BINJA_API_LIBRARY binaryninjaapi
-    HINTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/binaryninja/binaryninja-api/bin
+    HINTS ${BINARYNINJAAPI_DIR}/bin
     )
 
-  MESSAGE("BNSdk_DIR:" ${BNSdk_DIR})
+  MESSAGE("BINARYNINJA_DIR:" ${BINARYNINJA_DIR})
+  MESSAGE("BINARYNINJAAPI_DIR:" ${BINARYNINJAAPI_DIR})
+
 
   find_library(BINJA_CORE_LIBRARY binaryninjacore
-    HINTS ${BNSdk_DIR}
+    HINTS ${BINARYNINJA_DIR}
     # ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/binaryninja
     )
 
@@ -209,7 +213,7 @@ if (BNSdk_DIR)
 
   add_library(binja_base INTERFACE)
   target_include_directories(binja_base INTERFACE
-    ${BNSdk_INCLUDE_DIRS}
+    ${binaryninjaapi_src_dir}
     ${CAPSTONE_INCLUDE_DIRS}
     )
 
@@ -222,9 +226,9 @@ if (BNSdk_DIR)
         -Wl,-exported_symbol,_PLUGIN)
     else ()
         target_link_libraries(binja_base INTERFACE
-          -Wl,-L${BNSdk_DIR} -Wl,-lbinaryninjacore
-          ${BINJA_API_LIBRARY}
-#          ${BINJA_CORE_LIBRARY}
+          -Wl,-L${BINARYNINJA_DIR} -Wl,-lbinaryninjacore
+          binaryninjaapi
+          ${CAPSTONE_LIBRARIES}
           )
     endif ()
 
@@ -240,7 +244,7 @@ if (BNSdk_DIR)
     INSTALL_RPATH ./:../
   )
 
-  set(binexport_libraries ${BnSdk_LIBRARIES}
+  set(binexport_libraries
     absl::strings
     absl::time
     binexport_proto
@@ -249,7 +253,6 @@ if (BNSdk_DIR)
     ${PostgreSQL_LIBRARIES}
     # OpenSSL must come after PostgreSQL
     OpenSSL::SSL
-    ${CAPSTONE_LIBRARIES}
     )
 
 

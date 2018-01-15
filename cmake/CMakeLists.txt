@@ -28,9 +28,10 @@ include(googletest.cmake)
 include(openssl.cmake)
 include(postgresql.cmake)  # Depends on openssl
 include(protobuf.cmake)
+include(binaryninjaapi.cmake)
 
 find_package(IdaSdk)
-find_package(BNSdk)
+find_package(BinaryNinja)
 
 string(REPLACE ";" "^^" CMAKE_PREFIX_PATH_ALT_SEP "${CMAKE_PREFIX_PATH}")
 ExternalProject_Add(binexport
@@ -50,7 +51,8 @@ ExternalProject_Add(binexport
              "-DCCTZ_ROOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/cctz"
              "-DGOOGLETEST_ROOT_DIR=${CMAKE_CURRENT_BINARY_DIR}/googletest"
              "-DIdaSdk_DIR=${IdaSdk_ROOT_DIR}"
-              "-DBNSdk_DIR=${BNSdk_ROOT_DIR}"
+             "-DBINARYNINJAAPI_DIR=${CMAKE_CURRENT_BINARY_DIR}/binaryninja-api"
+             "-DBINARYNINJA_DIR=${BINARYNINJA_ROOT_DIR}"
              "-DBUILD_TESTING=OFF"
              "-DCMAKE_BUILD_TYPE=Debug"
 )

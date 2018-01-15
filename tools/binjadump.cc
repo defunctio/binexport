@@ -4,6 +4,7 @@
 #include <iostream>
 #include <binaryninja/binja_export.h>
 #include <filesystem_util.h>
+#include <stubs/base/logging.h>
 
 int main(int argc, char* argv[]) {
   if (argc != 2) {
@@ -14,9 +15,10 @@ int main(int argc, char* argv[]) {
   std::string filename(argv[1]);
 
   if (!FileExists(filename)) {
-    perror("could not open file");
+    LOG(QFATAL) << ("Could not open input file: " + filename);
     return EXIT_FAILURE;
   }
+  LOG(INFO) << "Opening File: " + filename;
 
   auto x = new BinjaExport(filename);
   if(!x->ExportProtobuf(filename + ".BinExport"))

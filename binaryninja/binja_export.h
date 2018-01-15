@@ -39,8 +39,6 @@
 #include <types.h>
 #include <operand.h>
 #include <instruction.h>
-#include <third_party/binaryninja/binaryninja-api/binaryninjacore.h>
-#include <third_party/binaryninja/binaryninja-api/binaryninjaapi.h>
 
 typedef std::pair <BNStringReference, BinaryNinja::ReferenceSource> RefPair;
 

@@ -24,8 +24,7 @@ target_link_libraries(binexport2dump
 )
 install(TARGETS binexport2dump RUNTIME DESTINATION binexport-prefix)
 
-
-
+# Binjadump - CLI to binjaexport
 add_executable(binjadump binjadump.cc)
 
 set_target_properties(binjadump PROPERTIES
